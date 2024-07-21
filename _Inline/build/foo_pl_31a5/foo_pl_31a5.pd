@@ -1,0 +1,28 @@
+pp_addhdr << 'EOH';
+
+EOH
+
+
+
+pp_def('shift_negs',
+	 Pars => 'i(n);[o] o(n)',
+	 Code => '$o() = 0;',
+	);
+
+pp_def('inc',
+	 Pars => 'i();[o] o()',
+	 Code => '$o() = $i() + 1;',
+	);
+
+pp_def('tcumul',
+       Pars => 'in(n);[o] mul()',
+       Code => '$mul() = 1;
+                          loop(n) %{
+                            $mul() *= $in();
+                          %}',
+      );
+
+
+
+
+pp_done();

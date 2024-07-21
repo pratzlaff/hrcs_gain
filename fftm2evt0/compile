@@ -1,0 +1,3 @@
+#! /bin/sh
+
+gcc -Wall -W -o fftm2evt0 fftm2evt0.c -I/usr/local/cfitsio -L/usr/local/cfitsio -lcfitsio -lm

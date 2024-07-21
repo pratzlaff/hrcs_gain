@@ -1,0 +1,3 @@
+syntax error at foo_pl_9bab.pd line 9, near "'loop (n) %{ $a() = 5; }';"
+Execution of foo_pl_9bab.pd aborted due to compilation errors.
+Inline running PDL::PP version 2.2...

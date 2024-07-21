@@ -1,0 +1,242 @@
+a not defined in '{register int __n_size = $PRIV(__n_size);
+/* Start generic loop */
+
+	switch($PRIV(__datatype)) { case -42: /* Warning eater */ {1;
+	} break; case PDL_B: {
+	PDL_Byte * i_datap = ((PDL_Byte *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_Byte * i_physdatap = ((PDL_Byte *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	} break; case PDL_S: {
+	PDL_Short * i_datap = ((PDL_Short *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_Short * i_physdatap = ((PDL_Short *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	} break; case PDL_US: {
+	PDL_Ushort * i_datap = ((PDL_Ushort *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_Ushort * i_physdatap = ((PDL_Ushort *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	} break; case PDL_L: {
+	PDL_Long * i_datap = ((PDL_Long *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_Long * i_physdatap = ((PDL_Long *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	} break; case PDL_LL: {
+	PDL_LongLong * i_datap = ((PDL_LongLong *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_LongLong * i_physdatap = ((PDL_LongLong *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	} break; case PDL_F: {
+	PDL_Float * i_datap = ((PDL_Float *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_Float * i_physdatap = ((PDL_Float *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	} break; case PDL_D: {
+	PDL_Double * i_datap = ((PDL_Double *)(PDL_REPRP_TRANS(($PRIV(pdls[0])),($PRIV(vtable->per_pdl_flags[0])))));
+	PDL_Double * i_physdatap = ((PDL_Double *)(($PRIV(pdls[0]))->data));
+
+	/* THREADLOOPBEGIN */
+ if(PDL->startthreadloop(&($PRIV(__pdlthread)),$PRIV(vtable)->readdata,
+ 	__tr)) return;
+   do { register int __tind1=0,__tind2=0;
+        register int __tnpdls = $PRIV(__pdlthread).npdls;
+      register int __tdims1 = $PRIV(__pdlthread.dims[1]);
+      register int __tdims0 = $PRIV(__pdlthread.dims[0]);
+      register int *__offsp = PDL->get_threadoffsp(&$PRIV(__pdlthread));
+ register int __tinc0_0 = $PRIV(__pdlthread).incs[0];register int __tinc1_0 = $PRIV(__pdlthread).incs[__tnpdls+0];i_datap += __offsp[0];
+
+	for(__tind2=0; __tind2<__tdims1 ; __tind2++) {
+	 for(__tind1=0; __tind1<__tdims0 ; __tind1++) {
+	  /* This is the tightest threadloop. Make sure inside is optimal. */
+{register PDL_Long __inc_i_n = $PRIV(__inc_i_n);
+
+{/* Open n */ register int n;
+			for(n=0; n<(__n_size); n++) { $a() = 5; }} /* Close n */
+}	/* THREADLOOPEND */
+	 i_datap += __tinc0_0;
+
+	 } i_datap += __tinc1_0
+	     			     - __tinc0_0 *
+				       __tdims0;
+
+	} i_datap -= __tinc1_0 *
+     				  __tdims1;
+ i_datap -= $PRIV(__pdlthread).offs[0];
+
+      } while(PDL->iterthreadloop(&$PRIV(__pdlthread),2));
+ 	break;}
+	default:barf("PP INTERNAL ERROR! PLEASE MAKE A BUG REPORT\n");}
+}'! at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 1424
+	PDL::PP::dosubst('ARRAY(0x82e11a4)', 'SymTab=HASH(0x8230528)', 'shift_negs') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 904
+	PDL::PP::translate('HASH(0x813c144)', 'ARRAY(0x82c49b4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 295
+	PDL::PP::pp_def('shift_negs', 'Pars', 'i(n)', 'Code', 'loop (n) %{ $a() = 5; %}') called at foo_pl_596c.pd line 7
+Inline running PDL::PP version 2.2...

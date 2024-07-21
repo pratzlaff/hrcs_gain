@@ -1,0 +1,394 @@
+#! /usr/bin/perl -w
+use strict;
+
+=head1 NAME
+
+template - A template for Perl programs.
+
+=head1 SYNOPSIS
+
+cp template newprog
+
+=head1 DESCRIPTION
+
+blah blah blah
+
+=head1 OPTIONS
+
+=over 4
+
+=item --help
+
+Show help and exit.
+
+=item --version
+
+Show version and exit.
+
+=back
+
+=head1 AUTHOR
+
+Pete Ratzlaff E<lt>pratzlaff@cfa.harvard.eduE<gt> January 2007
+
+=head1 SEE ALSO
+
+perl(1).
+
+=cut
+
+my $version = '0.1';
+
+use FindBin;
+use Config;
+use Carp;
+use PDL;
+use MyRDB;
+use Chandra::Tools::Common qw( read_bintbl_cols );
+use IO::Handle;
+use File::Path qw( mkpath );
+use Data::Dumper;
+use Math::Trig qw( pi );
+use PDL::Graphics::PGPLOT;
+use PDL::Fit::LM qw( lmfit );
+use Lab;
+
+use Getopt::Long;
+my %default_opts = (
+		    filtdir => '/data/legs/rpete/data/hrcs_lab/evt1',
+		    subtaps => 3,
+		    binext => '.bin',
+		    rdbext => '.rdb',
+		    outdir => '.',
+		    rdb => 1,
+		    bin => 1,
+		    fitcnts => 50,
+		    config => 'hrcs_lab.rdb',
+		    twogauss => 0, # fit two normal distributions
+		    );
+my %opts = %default_opts;
+GetOptions(\%opts,
+	   'help!', 'version!', 'debug!',
+	   'htmldir=s', 'filtdir=s', 'subtaps=i',
+	   'binext=s', 'rdbext=s', 'rdb!', 'bin!', 'config=s',
+	   'outdir=s', 'twogauss!', 'allbin!',
+	   'rdbfile=s', 'phabinfile=s', 'sampbinfile=s',
+	   ) or die "Try --help for more information.\n";
+if ($opts{debug}) {
+  $SIG{__WARN__} = \&Carp::cluck;
+  $SIG{__DIE__} = \&Carp::confess;
+}
+$opts{help} and _help();
+$opts{version} and _version();
+
+$Lab::TESTFILE = $opts{config};
+
+# if given basename arguments, use them, otherwise process all files
+my @base;
+if (@ARGV) {
+  @base = @ARGV;
+}
+
+else {
+  my (undef, undef, undef, undef, $hrc_file) = Lab::test_data() or die;
+  @base = @$hrc_file;
+}
+
+my $subtaps = $opts{subtaps};
+my @percentiles = qw( 0.10 0.50 1.25 96.25 98.50 99.60 );
+
+# subtap limits, relative to tap beginning coord
+my @sublimits = (map(int(Lab::TAPSIZE*$_/$opts{subtaps}), 1..$opts{subtaps}-1), Lab::TAPSIZE);
+
+my ($xtap, $xsubtap, $ytap, $ysubtap, $x1, $x2, $y1, $y2) =
+  mkcoords(Lab::RAWX_MAX, Lab::RAWY_MAX, Lab::TAPSIZE, $opts{subtaps});
+
+#print $_->nelem,"\n" for $ytap, $ysubtap, $xtap, $xsubtap;
+#wcols $ytap, $ysubtap, $xtap, $xsubtap, $y1, $y2, $x1, $x2;
+#exit;
+
+my $xtap_reduced = sequence(long, long(Lab::RAWX_MAX)/long(Lab::TAPSIZE))+1;
+my $xsubtap_reduced = sequence(long, $subtaps)+1;
+
+my $ytap_reduced = sequence(long, long(Lab::RAWY_MAX)/long(Lab::TAPSIZE))+1;
+my $ysubtap_reduced = sequence(long, $subtaps)+1;
+
+for my $base (@base) {
+
+  my $rdbfile = $opts{rdbfile} || $opts{outdir} . '/' . $base.$opts{rdbext};
+  my $pha_binfile = $opts{phabinfile} || $opts{outdir} . '/' . $base.$opts{binext};
+  my $samp_binfile = $opts{sampbinfile} || $opts{outdir} . '/' . $base.'_samp'.$opts{binext};
+
+  my $rdb;
+  if ($opts{rdb}) {
+    $rdb = IO::File->new("> $rdbfile") or die "could not open $rdbfile: $!";
+
+    my @cols = qw( crsv crsv_sub crsu crsu_sub rawy_range rawx_range n pha_lt_3 pha_eq_255 pha_mean pha_rms pha_median samp_mean samp_rms samp_median );
+
+    my @fit_cols = qw( _gnorm _gsigma _gmean );
+
+    push @cols, map('pha'.$_, @fit_cols);
+    push @cols, map('pha'.$_.'2', @fit_cols) if $opts{twogauss};
+
+    push @cols, map('samp'.$_, @fit_cols);
+    push @cols, map('samp'.$_.'2', @fit_cols) if $opts{twogauss};
+
+    $rdb->print( join("\t",@cols),"\n" );
+    $rdb->print( join("\t", ( qw( N N N N S S ), ('N')x(@cols-6))) );
+    $rdb->print( "\n" );
+  }
+
+  my ($pha_bin, $samp_bin);
+  if ($opts{bin}) {
+    $pha_bin = IO::File->new("> $pha_binfile") or die;
+    $samp_bin = IO::File->new("> $samp_binfile") or die;
+  }
+
+  my $evt1 = "$opts{filtdir}/${base}_evt1_filt.fits";
+  -f $evt1 or die $base;
+
+  print STDERR "reading $evt1...";
+  STDERR->flush;
+  my ($rawx, $rawy, $pha, $sumamps, $amp_sf) = read_bintbl_cols($evt1, 'rawx', 'rawy', 'pha', 'sumamps', 'amp_sf', { extname => 'events', status => 1 } ) or die;
+  my $samp = $sumamps >> (8 - $amp_sf);
+  print STDERR " done\n";
+
+=begin comment
+
+  for my $i (0..$xtap->nelem-1) {
+    my ($xtap, $xsubtap, $ytap, $ysubtap, $x1, $x2, $y1, $y2) =
+      (
+       $xtap->at($i),
+       $xsubtap->at($i),
+       $ytap->at($i),
+       $ysubtap->at($i),
+       $x1->at($i),
+       $x2->at($i),
+       $y1->at($i),
+       $y2->at($i),
+       );
+
+    my $index = which(
+		      ($rawx >= $x1) & ($rawx <= $x2) &
+		      ($rawy >= $y1) & ($rawy <= $y2)
+		      );
+    $index->nelem or next;
+
+  }
+
+=cut
+
+  # tried filtering at various steps and changing the order of rawx/y
+  # stepping, the following represents my best effort
+
+  for my $ytap ($ytap_reduced->list) {
+
+    my $y1 = ($ytap-1) * Lab::TAPSIZE + 1;
+    my $y2 = $y1 + Lab::TAPSIZE - 1;
+
+    my $index = which( ($rawy >= $y1) & ($rawy <= $y2) );
+    $index->nelem or next;
+
+    my ($rawx, $rawy, $pha, $samp) = ($rawx->index($index),
+				      $rawy->index($index),
+				      $pha->index($index),
+				      $samp->index($index),
+				     );
+    for my $ysubtap ($ysubtap_reduced->list) {
+      my $y1 = ($ytap-1)*Lab::TAPSIZE+1 + long(Lab::TAPSIZE*($ysubtap-1)/$subtaps);
+      my $y2 = ($ytap-1)*Lab::TAPSIZE + long(Lab::TAPSIZE*$ysubtap/$subtaps);
+
+      my $index = which( ($rawy >= $y1) & ($rawy <= $y2) );
+      $index->nelem or next;
+
+      my ($rawx, $rawy, $pha, $samp) = ($rawx->index($index),
+					$rawy->index($index),
+					$pha->index($index),
+					$samp->index($index),
+				       );
+
+      for my $xtap ($xtap_reduced->list) {
+
+	my $x1 = ($xtap-1) * Lab::TAPSIZE + 1;
+	my $x2 = $x1 + Lab::TAPSIZE - 1;
+
+	my $index = which( ($rawx >= $x1) & ($rawx <= $x2) );
+	$index->nelem or next;
+
+	my ($rawx, $rawy, $pha, $samp) = ($rawx->index($index),
+					  $rawy->index($index),
+					  $pha->index($index),
+					  $samp->index($index),
+					 );
+
+	for my $xsubtap ($xsubtap_reduced->list) {
+
+	  my $x1 = ($xtap-1)*Lab::TAPSIZE+1 + long(Lab::TAPSIZE*($xsubtap-1)/$subtaps);
+	  my $x2 = ($xtap-1)*Lab::TAPSIZE + long(Lab::TAPSIZE*$xsubtap/$subtaps);
+
+	  my $index = which( ($rawx >= $x1) & ($rawx <= $x2) );
+	  $index->nelem or next;
+
+	  my $samp = $samp->index($index);
+	  my $pha = $pha->index($index);
+
+	  if ($samp->nelem != $pha->nelem) {
+	    die $samp->nelem . ' ' . $pha->nelem;
+	  }
+
+	  my ($pha_mean, $pha_rms, $pha_median) = $pha->float->stats;
+	  my ($samp_mean, $samp_rms, $samp_median) = $samp->float->stats;
+
+	  my $pha_params = zeroes($opts{twogauss} ? 6 : 3);
+	  my $samp_params = $pha_params->copy;
+
+	  if ($pha->nelem >= $opts{fitcnts} or $opts{allbin}) {
+
+	    my ($pha_x, $pha_y) = hist($pha->double, -0.5, 255.5, 1);
+	    my ($samp_x, $samp_y) = hist($samp->double, -0.5, 511.5, 1);
+
+	    if ($pha->nelem >= $opts{fitcnts}) {
+
+	      my ($pha_fit, $samp_fit);
+
+	      # params are norm, sigma, mean (x2)
+	      my $pha_params_init = $opts{twogauss} ?
+		float($pha_y->sum/5, 50, $pha_median/2, $pha_y->sum, 15, $pha_median) :
+		  float($pha_y->sum, 15, $pha_median);
+	      my $samp_params_init = $pha_params_init->copy;
+
+	      ($pha_fit, $pha_params) = lmfit($pha_x, $pha_y, 1, $opts{twogauss} ? \&two_normals : \&one_normal, $pha_params_init);
+
+	      ($samp_fit, $samp_params) = lmfit($samp_x, $samp_y, 1, $opts{twogauss} ? \&two_normals : \&one_normal, $samp_params_init);
+
+	    }
+
+	    if ($opts{bin}) {
+	      $_->print( pack( 'N*',
+			       $ytap-1, $ysubtap-1,
+			       $xtap-1, $xsubtap-1,
+			       $y1, $y2, $x1, $x2 )
+		       ) for $pha_bin, $samp_bin;
+
+	      my $pha_y = $pha_y->long->copy;
+	      my $samp_y = $samp_y->long->copy;
+
+	      $pha_y->bswap4 unless isbigendian();
+	      $samp_y->bswap4 unless isbigendian();
+
+	      if ($samp_y->nelem != 2*$pha_y->nelem) {
+		die $samp->nelem . ' ' . $pha->nelem;
+	      }
+
+	      $pha_bin->print( ${ $pha_y->get_dataref } );
+	      $samp_bin->print( ${ $samp_y->get_dataref } );
+	    }
+	  }
+
+
+	  if ($opts{rdb}) {
+	    $rdb->print(join("\t",
+		     $ytap-1, $ysubtap-1,
+		     $xtap-1, $xsubtap-1, "$y1:$y2", "$x1:$x2",
+		     $pha->nelem,
+		     which($pha<3)->nelem,
+		     which($pha==255)->nelem,
+#		     sprintf("%.3f", which($pha<3)->nelem / $pha->nelem),
+#		     sprintf("%.3f", which($pha==255)->nelem / $pha->nelem),
+		     sprintf("%.1f", $pha_mean),
+		     sprintf("%.1f", $pha_rms),
+		     $pha_median,
+		     sprintf("%.1f", $samp_mean),
+		     sprintf("%.1f", $samp_rms),
+		     $samp_median,
+		     map { sprintf "%.2f", $_ } $pha_params->list,
+		     map { sprintf "%.2f", $_ } $samp_params->list,
+		    ), "\n");
+	  }
+
+	} # xsubtap
+      }   # xtap
+    }     # ysubtap
+  }       # ytap
+
+
+
+}
+
+exit 0;
+
+sub _help {
+  exec("$Config{installbin}/perldoc", '-F', $FindBin::Bin . '/' . $FindBin::RealScript);
+}
+
+sub _version {
+  print $version,"\n";
+  exit 0;
+}
+
+sub two_normals {
+  my ($x,$par,$ym,$dyda) = @_;
+
+  my ($n1,$s1,$u1,$n2,$s2,$u2) = map { $par->slice("($_)") } (0..5);
+
+  my $exp1 = 1 / $s1 / sqrt(2*pi) * exp(-0.5 * (($x-$u1)/$s1)**2 );
+  my $exp2 = 1 / $s2 / sqrt(2*pi) * exp(-0.5 * (($x-$u2)/$s2)**2 );
+
+  $ym .= $n1*$exp1 + $n2*$exp2;
+
+  my (@dy) = map {$dyda->slice(",($_)")} (0..5);
+
+  $dy[0] .= $exp1;                                       # partial wrt norm
+  $dy[1] .= $n1 / $s1 * $exp1 * ((($x-$u1)/$s1)**2 - 1); # partial wrt sigma
+  $dy[2] .= ($x-$u1) * $n1 / $s1 / $s1 * $exp1;          # partial wrt mean
+
+  $dy[3] .= $exp2;
+  $dy[4] .= $n2 / $s2 * $exp2 * ((($x-$u2)/$s2)**2 - 1);
+  $dy[5] .= ($x-$u2) * $n2 / $s2 / $s2 * $exp2;
+}
+
+sub one_normal {
+  my ($x,$par,$ym,$dyda) = @_;
+
+  my ($n1,$s1,$u1) = map { $par->slice("($_)") } (0..2);
+
+  my $exp1 = 1 / $s1 / sqrt(2*pi) * exp(-0.5 * (($x-$u1)/$s1)**2 );
+
+  $ym .= $n1*$exp1;
+
+  my (@dy) = map {$dyda->slice(",($_)")} (0..2);
+
+  $dy[0] .= $exp1;                                       # partial wrt norm
+  $dy[1] .= $n1 / $s1 * $exp1 * ((($x-$u1)/$s1)**2 - 1); # partial wrt sigma
+  $dy[2] .= ($x-$u1) * $n1 / $s1 / $s1 * $exp1;          # partial wrt mean
+}
+
+sub mkcoords {
+  my ($xdim, $ydim, $tapsize, $subtaps) = @_;
+
+  my $xtap_reduced = sequence(long, long($xdim)/long($tapsize))+1;
+  my $xsubtap_reduced = sequence(long, $subtaps)+1;
+
+  my $ytap_reduced = sequence(long, long($ydim)/long($tapsize))+1;
+  my $ysubtap_reduced = sequence(long, $subtaps)+1;
+
+  # expand rawX tap/subtap lists to span a single rawY subtap
+  my $xtap = $xtap_reduced->dummy(0, $xsubtap_reduced->nelem)->flat;
+  my $xsubtap = $xsubtap_reduced->dummy(-1, $xtap_reduced->nelem)->flat;
+
+  # expand rawY tap/subtap lists fully
+  my $ytap = $ytap_reduced->dummy(0, $xtap->nelem * $ysubtap_reduced->nelem)->flat;
+  my $ysubtap = $ysubtap_reduced->dummy(0, $xtap->nelem)->flat->dummy(-1, $ytap_reduced->nelem)->flat;
+
+  # finish expansion of rawX tap/subtap lists
+  $_ = $_->dummy(-1, $ytap_reduced->nelem * $ysubtap_reduced->nelem)->flat
+    for $xtap, $xsubtap;
+
+  my $x1 = ($xtap-1)*$tapsize+1 + long($tapsize*($xsubtap-1)/$subtaps);
+  my $x2 = ($xtap-1)*$tapsize + long($tapsize*$xsubtap/$subtaps);
+
+  my $y1 = ($ytap-1)*$tapsize+1 + long($tapsize*($ysubtap-1)/$subtaps);
+  my $y2 = ($ytap-1)*$tapsize + long($tapsize*$ysubtap/$subtaps);
+
+  return $xtap, $xsubtap, $ytap, $ysubtap, $x1, $x2, $y1, $y2;
+}

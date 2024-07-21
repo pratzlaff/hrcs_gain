@@ -1,0 +1,10 @@
+Index not found for n ()!
+ at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 154
+	PDL::PP::Code::make_loopind('PDL::PP::Code=HASH(0x822fc40)', 'n') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 247
+	PDL::PP::Loop::new('PDL::PP::Loop', 'ARRAY(0x822f784)', 'HASH(0x822fbd4)', 'PDL::PP::Code=HASH(0x822fc40)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 1164
+	PDL::PP::Code::separate_code('PDL::PP::Code=HASH(0x822fc40)', '{\x{a}\x{a}       $o() = 0;\x{a}       loop(n) %{\x{a}\x{9} \x{a}       %}\x{a}}') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 68
+	PDL::PP::Code::new('PDL::PP::Code', '\x{a}       $o() = 0;\x{a}       loop(n) %{\x{a}\x{9} \x{a}       %}', 'undef', 'ARRAY(0x825ec58)', 'HASH(0x82b7fb8)', 'PDL::PP::PdlDimsObj=HASH(0x82b7898)', 'ARRAY(0x82b7934)', 'HASH(0x82b7acc)', 1, ...) called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 584
+	PDL::PP::__ANON__('\x{a}       $o() = 0;\x{a}       loop(n) %{\x{a}\x{9} \x{a}       %}', 'undef', 'ARRAY(0x825ec58)', 'HASH(0x82b7fb8)', 'PDL::PP::PdlDimsObj=HASH(0x82b7898)', 'ARRAY(0x82b7934)', 'HASH(0x82b7acc)', 1, 'shift_negs', ...) called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 904
+	PDL::PP::translate('HASH(0x813c144)', 'ARRAY(0x82c49b4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 295
+	PDL::PP::pp_def('shift_negs', 'Pars', 'i(); [o] o()', 'Code', '\x{a}       $o() = 0;\x{a}       loop(n) %{\x{a}\x{9} \x{a}       %}') called at foo_pl_83ba.pd line 7
+Inline running PDL::PP version 2.2...

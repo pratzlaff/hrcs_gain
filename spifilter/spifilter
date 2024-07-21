@@ -1,0 +1,251 @@
+#! /usr/bin/perl -w
+use strict;
+
+=head1 NAME
+
+spifilter - filter an HRC-S/LETG event list on (TG_MLAM-dependent) maximum SPI
+
+=head1 SYNOPSIS
+
+spifilter [options] infile outfile
+
+=head1 DESCRIPTION
+
+F<infile> should be an event list FITS file containing columns
+TG_MLAM and SPI.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --help
+
+Show help and exit.
+
+=item --version
+
+Show version and exit.
+
+=item --spec
+
+File containing the SPI filtering specification. The default value is
+F<spifilter.spec> in the directory containing the I<spifilter> program.
+
+=item --spicol=s
+
+Name of the input SPI column, default is "SPI".
+
+=item --mlamcol=s
+
+Name of the input MLAM column, default is "TG_MLAM".
+
+=item --extname=s
+
+Name of the event list binary table. The default name is C<events>.
+
+=back
+
+=head1 HISTORY
+
+=over 4
+
+=item August 28, 2008
+
+Initial version 1.0
+
+=back
+
+=head1 AUTHOR
+
+Pete Ratzlaff E<lt>pratzlaff@cfa.harvard.eduE<gt>
+
+=head1 SEE ALSO
+
+perl(1).
+
+=cut
+
+my $version = '1.0';
+
+use Config;
+use lib '/home/rpete/local/perlmods';
+use lib '/home/rpete/local/perlmods/'.$Config{archname};
+
+use Astro::FITS::CFITSIO qw( CASEINSEN TDOUBLE READONLY BINARY_TBL TLONG );
+use PDL;
+use Carp;
+use FindBin;
+use Getopt::Long;
+
+my %default_opts = (
+		    spec => $FindBin::Bin . '/spifilter.spec',
+		    extname => 'events',
+		    spicol => 'spi',
+		    mlamcol => 'tg_mlam',
+		    );
+my %opts = %default_opts;
+GetOptions(\%opts,
+	   'help!', 'version!', 'debug!',
+	   'spec=s', 'extname=s', 'spicol=s', 'mlamcol=s',
+	  ) or die "Try --help for more information.\n";
+
+if ($opts{debug}) {
+  $SIG{__WARN__} = \&Carp::cluck;
+  $SIG{__DIE__} = \&Carp::confess;
+}
+$opts{help} and _help();
+$opts{version} and _version();
+
+@ARGV == 2 or die "Usage: $0 [options] infile outfile\ntry --help for more information\n";
+
+# construct HISTORY entry we'll be adding to output file
+my @argv_copy = @ARGV;
+#s/\\/\\\\/g for @argv_copy;
+s/'/\\'/g for @argv_copy;
+my $history_entry = "$0 ". join(' ', map("'$_'", @argv_copy));
+
+my ($infile, $outfile) = @ARGV;
+
+my ($mlam_spec, $spimax_spec) = read_spec($opts{spec});
+
+# open input file
+my $status = 0;
+my $infptr = Astro::FITS::CFITSIO::open_file($infile, READONLY, $status);
+check_status($status) or die "error opening input file '$infile'\n";
+
+# move to the events hdu
+$infptr->movnam_hdu(BINARY_TBL, $opts{extname}, 0, $status);
+check_status($status) or die "could not move to '$opts{extname}' HDU in $infile\n";
+
+my $events_hdunum;
+$infptr->get_hdu_num($events_hdunum);
+
+# get required column numbers
+my %cols = (
+	    $opts{spicol} => { ctype => TDOUBLE, ptype => double, },
+	    $opts{mlamcol} => { ctype => TDOUBLE, ptype => double, },
+	   );
+
+for (keys %cols) {
+  $cols{$_}{colnum} = undef;
+  $infptr->get_colnum(CASEINSEN, $_, $cols{$_}{colnum}, $status);
+  check_status($status) or die "no $_ column found in $opts{extname} HDU from $infile\n";
+}
+
+# create output file, force clobber
+$outfile =~ /^!/ or $outfile = "!$outfile";
+my $outfptr = Astro::FITS::CFITSIO::create_file($outfile, $status);
+check_status($status) or die "error creating output file '$outfile'\n";
+
+# copy all HDUs
+$infptr->copy_file($outfptr, 1, 1, 1, $status);
+check_status($status) or die "error copying input file to output file\n";
+
+# we're all done with input file
+$infptr->close_file($status);
+check_status($status) or die "error closing input file\n";
+
+$outfptr->movabs_hdu($events_hdunum, undef, $status);
+check_status($status) or die "could not move to $opts{extname} HDU in $outfile\n";
+
+# add a HISTORY keyword
+$outfptr->write_history($history_entry, $status);
+check_status($status) or die "error writing HISTORY entry to $outfile\n";
+
+my ($nrows, $nrows_at_once);
+$outfptr->get_num_rows($nrows, $status);
+$outfptr->get_rowsize($nrows_at_once, $status);
+
+for (keys %cols) {
+  $cols{$_}{tmppdl} = zeroes($cols{$_}{ptype}, $nrows_at_once);
+  $cols{$_}{piddle} = zeroes($cols{$_}{ptype}, $nrows);
+}
+
+if (Astro::FITS::CFITSIO->VERSION > 1.01) {
+  $outfptr->perlyunpacking(0);
+}
+else {
+  Astro::FITS::CFITSIO::PerlyUnpacking(0);
+}
+
+my $nrows_done = 0;
+while ($nrows_done < $nrows) {
+  my $nrows_now = ($nrows_done+$nrows_at_once <= $nrows) ?
+    $nrows_at_once : $nrows-$nrows_done;
+
+  my $s1 = $nrows_done . ':' . ($nrows_done + $nrows_now - 1);
+  my $s2 = '0:' . ($nrows_now-1);
+
+  for (keys %cols) {
+    $outfptr->read_col($cols{$_}{ctype}, $cols{$_}{colnum}, $nrows_done+1, 1, $nrows_now, 0, ${$cols{$_}{tmppdl}->get_dataref}, undef, $status);
+    $cols{$_}{tmppdl}->upd_data;
+
+    (my $tmp = $cols{$_}{piddle}->slice($s1)) .= $cols{$_}{tmppdl}->slice($s2);
+  }
+  check_status($status) or die "error reading data\n";
+
+
+  $nrows_done += $nrows_now;
+}
+
+# we've read the data, now determine which events to delete
+
+my $mlam = $cols{$opts{mlamcol}}{piddle};
+my $spi = $cols{$opts{spicol}}{piddle};
+my $spimax = interpol $mlam, $mlam_spec, $spimax_spec;
+
+# filter NaN mlam values as well
+my $badi = which(
+		 ($spi > $spimax) |
+		 ($mlam != $mlam) |           # filter mlam==NaN (redundant?)
+		 ($mlam < $mlam_spec->min) |  # remove wavelengths lt min spec
+		 ($mlam > $mlam_spec->max)    #   "         "      gt max  "
+		);
+# earlier versions of cfitsio module don't have delete_rowlistll
+for (Astro::FITS::CFITSIO::sizeof_datatype(TLONG)) {
+  $_ == 4 and $badi = $badi->long, last;
+  $_ == 8 and $badi = $badi->longlong, last;
+  die "sizeof TLONG = $_ (contact Pete Ratzlaff!)";
+}
+
+print STDERR 'removing ' . $badi->nelem . ' of ' . $mlam->nelem . " events\n";
+if ($badi->nelem > 0) {
+  $badi++;
+  $outfptr->delete_rowlist($badi->get_dataref, $badi->nelem, $status);
+  check_status($status) or die "error deleteing rows\n";
+}
+
+$outfptr->write_chksum($status);
+check_status($status) or die "error updating checksum in $outfile\n";
+
+$outfptr->close_file($status);
+check_status($status) or die "error closing $outfile\n";
+
+exit 0;
+
+sub check_status {
+  my $s = shift;
+  if ($s != 0) {
+    my $txt;
+    Astro::FITS::CFITSIO::fits_get_errstatus($s,$txt);
+    carp "CFITSIO error: $txt";
+    return 0;
+  }
+
+  return 1;
+}
+
+sub _help {
+  exec('perldoc', '-F', $FindBin::Bin . '/' . $FindBin::RealScript);
+}
+
+sub _version {
+  print $version,"\n";
+  exit 0;
+}
+
+sub read_spec {
+  my $file = shift;
+  my ($mlam, $spimax) = rcols $file;
+  return $mlam, $spimax;
+}

@@ -1,0 +1,521 @@
+#! /usr/bin/perl -w
+use strict;
+
+=head1 NAME
+
+addpilab - append PILAB data to an HRC-S event list
+
+=head1 SYNOPSIS
+
+addpilab [options] infile outfile
+
+=head1 DESCRIPTION
+
+F<infile> should be an event list FITS file containing columns
+RAWX, RAWY, AMP_SF and SUMAMPS.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --help
+
+Show help and exit.
+
+=item --version
+
+Show version and exit.
+
+=item --norecalcsamp
+
+Instead of calculating SAMP, use existing values in the input
+file. Automatically imples C<--noaddsamp>.
+
+=item --addsamp
+
+Add calculated SAMP column to the output file.
+
+=item --noaddpilab
+
+Do not add PILAB column to the output file.
+
+=item --colname=s
+
+Name of the added column. The default value is PILAB.
+
+=item --tcorr
+
+Enable time-dependent corrections to PILAB calculation.
+
+=item --spifits=s
+
+File containing PILAB calculation parameters. The default value is
+F<spimeanfits.fits> in the directory containing the I<addpilab>
+program. To use the median parameterization, for example, one would
+set this parameter to the full path location of F<spimedfits.fits>.
+
+An RDB file may also be specified, containing columns CRSV, VSUB,
+CRSU, USUB, S_i, b_i, and m_i (in that order).
+
+=item --tgain=s
+
+File containing TGAIN data. Usually these data are tabulated in the
+C<spifits> FITS file, but in cases where a C<spifits> RDB file is used
+instead, the C<tgain> option allows for time-dependent corrections
+
+=item --extname=s
+
+Name of the event list binary table. The default name is C<events>.
+
+=back
+
+=head1 HISTORY
+
+=over 4
+
+=item May, 2017
+
+Initial version 1.0
+
+=back
+
+=head1 AUTHOR
+
+Pete Ratzlaff E<lt>pratzlaff@cfa.harvard.eduE<gt>
+
+=head1 SEE ALSO
+
+perl(1).
+
+=cut
+
+my $version = '1.0';
+
+use constant TAPSIZE => 256;
+use constant SUBTAPS => 3;
+
+use constant RAWX_MIN => 0;
+use constant RAWX_MAX => 4095;
+
+use constant RAWY_MIN => 0;
+use constant RAWY_MAX => 16384 * 3 - 1;
+
+# use Config;
+# use lib '/home/rpete/local/perlmods';
+# use lib '/home/rpete/local/perlmods/'.$Config{archname};
+use Astro::FITS::CFITSIO qw(
+			    CASEINSEN TDOUBLE TSTRING TINT READONLY BINARY_TBL
+			   );
+use PDL;
+use Carp;
+use FindBin;
+use Getopt::Long;
+
+my %default_opts = (
+		    spifits => $FindBin::Bin . '/spimeanfits.fits',
+		    extname => 'events',
+		    tcorr => 0, # apply time dependent correction to samp?
+		    recalcsamp => 1, # recalculate samp values
+		    addsamp => 0,  # add samp column?
+		    addpilab => 1,   # add pilab column?
+		    colname => 'pilab',
+		   );
+my %opts = %default_opts;
+GetOptions(\%opts,
+	   'help!', 'version!', 'debug!',
+	   'spifits=s', 'tgain=s', 'extname=s', 'tcorr!', 'date=s',
+	   'recalcsamp!', 'addsamp!', 'addpilab!', 'colname=s',
+	   ) or die "Try --help for more information.\n";
+
+if ($opts{debug}) {
+  $SIG{__WARN__} = \&Carp::cluck;
+  $SIG{__DIE__} = \&Carp::confess;
+}
+$opts{help} and _help();
+$opts{version} and _version();
+
+
+@ARGV == 2 or die "Usage: $0 [options] infile outfile\ntry --help for more information\n";
+
+$opts{tcorr} = 1 if $opts{tgain};
+$opts{addsamp} = 0 if not $opts{recalcsamp};
+
+my $date;
+if ($opts{date} and $opts{tcorr}) {
+  my ($y, $m, $d) = $opts{date} =~ /^(\d{4})-(\d{2})-(\d{2})/ or die "YYY-MM-DD is the required date format";
+  $date = ymd2year($y, $m, $d);
+}
+
+@ARGV == 2 or die "invalid arguments, try --help for more information\n";
+
+# construct HISTORY entry to be added to output file
+my @argv_copy = @ARGV;
+#s/\\/\\\\/g for @argv_copy;
+s/'/\\'/g for @argv_copy;
+my $history_entry = "$0 ". join(' ', map("'$_'", @argv_copy));
+
+my ($infile, $outfile) = @ARGV;
+
+my %spifits;
+if ($opts{spifits} =~ /\.fits$/) {
+  @spifits{qw( S b m dates factors )} = read_spifits($opts{spifits});
+} elsif ($opts{spifits} =~ /\.rdb$/) {
+  @spifits{qw( S b m )} = read_spirdb($opts{spifits});
+} else {
+  die "cannot understand how to read parameterization file '$opts{spifits}'";
+}
+
+if ($opts{tgain}) {
+  @spifits{qw( dates factors )} = read_tgain($opts{tgain});
+}
+
+# open input file
+my $status = 0;
+my $infptr = Astro::FITS::CFITSIO::open_file($infile, READONLY, $status);
+check_status($status) or die "error opening input file '$infile'\n";
+
+# move to the events hdu
+$infptr->movnam_hdu(BINARY_TBL, $opts{extname}, 0, $status);
+check_status($status) or die "could not move to '$opts{extname}' HDU in $infile\n";
+
+my $events_hdunum;
+$infptr->get_hdu_num($events_hdunum);
+
+# seems to work on both 32 and 64 bit archs, but make sure anyway
+use PDL::Core 'howbig';
+die unless howbig(long) == Astro::FITS::CFITSIO::sizeof_datatype(TINT);
+
+my %cols = ( );
+
+if ($opts{addpilab}) {
+  %cols = ( %cols,
+	    rawx => { ctype => TINT, ptype => long, },
+	    rawy => { ctype => TINT, ptype => long, },
+	    );
+}
+
+if ($opts{recalcsamp}) {
+  %cols = ( %cols,
+	    amp_sf => { ctype => TINT, ptype => long, },
+	    sumamps => { ctype => TINT, ptype => long, },
+	  );
+}
+else {
+  %cols = ( %cols,
+	    samp => { ctype => TDOUBLE, ptype => double },
+	  );
+}
+
+for (keys %cols) {
+  $cols{$_}{colnum} = undef;
+  $infptr->get_colnum(CASEINSEN, $_, $cols{$_}{colnum}, $status);
+  check_status($status) or die "no $_ column found in $opts{extname} HDU from $infile\n";
+}
+
+# create output file, force clobber
+$outfile =~ /^!/ or $outfile = "!$outfile";
+my $outfptr = Astro::FITS::CFITSIO::create_file($outfile, $status);
+check_status($status) or die "error creating output file '$outfile'\n";
+
+# copy all HDUs
+$infptr->copy_file($outfptr, 1, 1, 1, $status);
+check_status($status) or die "error copying input file to output file\n";
+
+# we're all done with input file
+$infptr->close_file($status);
+check_status($status) or die "error closing input file\n";
+
+$outfptr->movabs_hdu($events_hdunum, undef, $status);
+check_status($status) or die "could not move to $opts{extname} HDU in $outfile\n";
+
+# get the date from the header if necessary
+if ($opts{addpilab}) {
+
+  if ($opts{tcorr} and !$date) {
+    # FIXME: should be using MJD_OBS, but this will do
+    my $datestr;
+    if ($outfptr->read_key(TSTRING, 'date-obs', $datestr, undef, $status)) {
+      die "no DATE-OBS keyword found in $outfile and neither option --date=YYYY-MM-DD or --notcorr was given. Dead";
+    }
+    my ($y, $m, $d) = $datestr=~/(\d{4})-(\d{2})-(\d{2})/ or die;
+    $date = ymd2year($y, $m, $d);
+  }
+
+  # interpolate time-dependent correction factors to the date of this
+  # observation
+  if ($opts{tcorr}) {
+    $spifits{factors} = interpol($date, $spifits{dates}, $spifits{factors});
+  }
+  else {
+    $spifits{factors} = ones($spifits{S}->getdim(1));
+  }
+
+}
+
+# add a HISTORY keyword
+$outfptr->write_history($history_entry, $status);
+check_status($status) or die "error writing HISTORY entry to $outfile\n";
+
+# add the SAMP, PILAB columns
+my $samp_colnum = $opts{addsamp} ? add_column($outfptr, 'samp', '1D') : 0;
+my $pilab_colnum = $opts{addpilab} ? add_column($outfptr, $opts{colname}, '1D') : 0;
+
+my ($nrows, $nrows_at_once);
+$outfptr->get_num_rows($nrows, $status);
+$outfptr->get_rowsize($nrows_at_once, $status);
+
+for (keys %cols) {
+  $cols{$_}{piddle} = zeroes($cols{$_}{ptype}, $nrows_at_once);
+}
+
+if (Astro::FITS::CFITSIO->VERSION > 1.01) {
+  $outfptr->perlyunpacking(0);
+}
+else {
+  Astro::FITS::CFITSIO::PerlyUnpacking(0);
+}
+
+my $nrows_done = 0;
+while ($nrows_done < $nrows) {
+  my $nrows_now = ($nrows_done+$nrows_at_once <= $nrows) ?
+    $nrows_at_once : $nrows-$nrows_done;
+
+  for (keys %cols) {
+    $outfptr->read_col($cols{$_}{ctype}, $cols{$_}{colnum}, $nrows_done+1, 1, $nrows_now, 0, ${$cols{$_}{piddle}->get_dataref}, undef, $status);
+    $cols{$_}{piddle}->upd_data;
+  }
+  check_status($status) or die "error reading data\n";
+
+  # calculate SAMP and PILAB values for these events
+
+  my $mslice_arg = [0, $nrows_now-1];
+
+  my ($rawx, $rawy);
+
+  my ($amp_sf, $sumamps, $samp);
+  if ($opts{recalcsamp}) {
+    ($amp_sf, $sumamps) =
+    map { $cols{$_}{piddle}->mslice($mslice_arg) } qw( amp_sf sumamps );
+    $samp = samp_calc($sumamps, $amp_sf);
+  }
+  else {
+    $samp = $cols{samp}{piddle}->mslice($mslice_arg);
+  }
+
+  if ($opts{addpilab}) {
+    ($rawx, $rawy) =
+      map { $cols{$_}{piddle}->mslice($mslice_arg) } qw( rawx rawy );
+  }
+
+  if ($opts{addsamp}) {
+    $outfptr->write_col(TDOUBLE,
+			$samp_colnum,
+			$nrows_done+1,
+			1,
+			$nrows_now,
+			$samp->double->get_dataref,
+			$status
+		       );
+    check_status($status) or die "error writing SAMP\n";
+  }
+
+  if ($opts{addpilab}) {
+
+    # 2d index of rawx/y into the spifits images
+    my $ix = rawto2d($rawx);
+    my $iy = rawto2d($rawy);
+    my $i = cat($ix, $iy)->mv(1,0);
+
+    # $samp /= $spifits{factors}->index($iy) if $opts{tcorr};
+    my $pilab = samp2pilab($samp,
+		       $spifits{S}->indexND($i),
+		       $spifits{b}->indexND($i),
+		       $spifits{'m'}->indexND($i),
+		       $spifits{'factors'}->index($iy),
+		      );
+
+    $outfptr->write_col(TDOUBLE,
+			$pilab_colnum,
+			$nrows_done+1,
+			1,
+			$nrows_now,
+			$pilab->double->get_dataref,
+			$status
+		       );
+
+    check_status($status) or die "error writing '$opts{colname}' column\n";
+  }
+
+  $nrows_done += $nrows_now;
+}
+
+$outfptr->write_chksum($status);
+check_status($status) or die "error updating checksum in $outfile\n";
+
+$outfptr->close_file($status);
+check_status($status) or die "error closing $outfile\n";
+
+exit 0;
+
+sub check_status {
+  my $s = shift;
+  if ($s != 0) {
+    my $txt;
+    Astro::FITS::CFITSIO::fits_get_errstatus($s,$txt);
+    carp "CFITSIO error: $txt";
+    return 0;
+  }
+
+  return 1;
+}
+
+sub _help {
+  exec('perldoc', '-F', $FindBin::Bin . '/' . $FindBin::RealScript);
+}
+
+sub _version {
+  print $version,"\n";
+  exit 0;
+}
+
+sub read_spirdb {
+  my $rdbfile = shift;
+
+  my $S = ones(48, 576); # FIXME: are these dimensions always going to work?
+  my $b = zeros($S);
+  my $m = $S->copy;
+
+  my ($v, $vsub, $u, $usub, $S_i, $b_i, $m_i) = rcols($rdbfile, { lines => '2:' });
+
+  my %out = ( S => $S, b => $b, m => $m );
+  my %in = ( S => $S_i, b => $b_i, m => $m_i );
+
+  # FIXME: figure out what's going on with the indexing here
+  my $yi = ($v-0)*3 + $vsub;
+  my $xi = ($u-0)*3 + $usub;
+
+  my $tmp;
+
+  ($tmp = $out{$_}->index2d($xi, $yi)->flat) .= $in{$_} for keys %out;
+
+  return @out{ qw/ S b m / };
+}
+
+sub read_spifits {
+  my $file = shift;
+
+  my @fits;
+  @fits = rfits($file);
+
+  my ($nx, $ny) = dims2d();
+
+  # primary hdu are stacked S, b and m
+  my $fits = $fits[0];
+  my @dims = $fits->dims;
+  @dims==3 and $dims[0]==3 and $dims[1]==$nx and $dims[2]==$ny or die "@dims";
+  my $S = $fits->slice('(0)'); # normalized samp
+  my $b = $fits->slice('(1)'); # intercept
+  my $m = $fits->slice('(2)'); # slope
+
+  # first extension has columns date and dropcorr, latter are
+  # corrective factors for each crsv subtap at the given date
+
+  # columns names can have trailing spaces in some cases (not sure
+  # exactly why, PDL 2.4.3 on some systems will keep the spaces, on others
+  # will not)
+
+  for my $key (keys %{$fits[1]}) {
+    my $key2 = $key;
+    $key2 =~ s/\s*$//;
+    $fits[1]->{$key2} = $fits[1]->{$key};
+  }
+
+  my $dates = $fits[1]->{date};
+  my $factors = $fits[1]->{dropcorr};
+
+  # duplicate crsv subtap factors across crsu
+#  $factors = $factors->dummy(1, $nx);
+
+  return $S, $b, $m, $dates, $factors;
+}
+
+# FIXME: hard-coded for three subtaps of sizes 85, 86, 85
+sub rawto2d {
+  my $raw = shift;
+
+  my $tap = long($raw / TAPSIZE);
+
+  my $offset = $raw % TAPSIZE;
+  my $coord = $tap * SUBTAPS;
+
+  my ($i, $tmp);
+
+  $i = which( ($offset >= 85) & ($offset < 85+86) );
+  ($tmp = $coord->index($i)) += 1;
+
+  $i = which($offset >= 85+86);
+  ($tmp = $coord->index($i)) += 2;
+
+  return $coord;
+}
+
+sub samp_calc {
+  my ($sumamps, $amp_sf) = @_;
+  return $sumamps*(2**($amp_sf-1))/128;
+#  return( $sumamps >> (8 - $amp_sf) );
+}
+
+sub dims2d {
+  my $nx = (RAWX_MAX - RAWX_MIN + 1) * SUBTAPS / TAPSIZE;
+  my $ny = (RAWY_MAX - RAWY_MIN + 1) * SUBTAPS / TAPSIZE;
+  return $nx, $ny;
+}
+
+sub samp2pilab {
+  my ($samp, $S, $b, $m, $C) = @_;
+  # see Brad's email from 2019-07-11
+  return 128.0/$m * ($samp / $S / $C - $b) + 0.0;
+  #return 41.2/$m * ($samp / $S / $C - $b) + 4.4;
+}
+
+sub add_column {
+  my ($fptr, $name, $type) = @_;
+  my $colnum;
+
+  my $status = 0;
+
+  if ($fptr->get_colnum(CASEINSEN, $name, $colnum, $status)) {
+    $status=0;
+    $outfptr->get_num_cols($colnum, $status);
+    $colnum++;
+    $outfptr->insert_col($colnum, $name, $type, $status);
+    check_status($status) or die "error adding $name column to output file\n";
+  }
+
+  return $colnum;
+}
+
+
+# return a fractional year
+sub ymd2year {
+  my ($y, $m, $d) = @_;
+  my $days = pdl(0,31,28+if_leap($y),31,30,31,30,31,31,30,31,30,31);
+  my $year = $y + ($d - 1 + $days->cumusumover->at($m-1))/$days->sum;
+  return $year;
+}
+
+# return 1 if leap year, 0 if not
+sub if_leap {
+  return 1 if ( !($_[0] % 4) and ($_[0] % 100) ) or !($_[0] % 400);
+  return 0;
+}
+
+sub read_tgain {
+  open(my $fh, '<', $_[0]) or die $!;
+  <$fh>; # discard first line
+  my @times = split ' ', <$fh>;
+  my $timegrid = pdl(@times[2..$#times]);
+  my ($rawy, @tgain) = rcols $fh;
+  my $tgain = cat @tgain;
+  return 1998 + ($timegrid-50814)/365.2422, $tgain->xchg(0,1);
+}

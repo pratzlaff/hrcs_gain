@@ -1,0 +1,18 @@
+#! /bin/bash
+
+s=/data/legs/rpete/flight/hrcs_tgain_update/N0003/spimeanfits2.rdb
+t=/data/legs/rpete/flight/hrcs_tgain_update/N0003/tgain1.oldstyle
+
+perl write_spifits.pl $s $t spimeanfits1.fits
+
+t=/data/legs/rpete/flight/hrcs_tgain_update/N0003/tgain2.oldstyle
+
+perl write_spifits.pl $s $t spimeanfits2.fits
+
+t=/data/legs/rpete/flight/hrcs_tgain_update/N0003/tgain1.oldstyle
+perl addpilab /data/legs/rpete/flight/xcal_hrcsi/data/hz43/1011/secondary/hrcf01011_000N004_evt1.fits.gz foo_a.fits --addsamp --tgain $t  --spifits $s
+perl addpilab /data/legs/rpete/flight/xcal_hrcsi/data/hz43/1011/secondary/hrcf01011_000N004_evt1.fits.gz foo_b.fits --addsamp --spifits ./spimeanfits1.fits --tcorr
+source /usr/local/ciao/bin/ciao.sh
+dmkeypar ./foo_a.fits datasum echo+
+dmkeypar ./foo_b.fits datasum echo+
+

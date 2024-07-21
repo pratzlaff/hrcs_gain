@@ -1,0 +1,15 @@
+Invalid subst n
+ at (eval 25) line 5
+	PDL::PP::PdlParObj::do_access('PDL::PP::PdlParObj=HASH(0x82ba29c)', 'n', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 521
+	PDL::PP::Access::get_str('PDL::PP::Access=ARRAY(0x822f664)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 200
+	PDL::PP::Block::get_str_int('PDL::PP::Block=ARRAY(0x82ba674)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 186
+	PDL::PP::Block::get_str('PDL::PP::Block=ARRAY(0x82ba674)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 200
+	PDL::PP::Block::get_str_int('PDL::PP::ComplexThreadLoop=ARRAY(0x8223c28)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 186
+	PDL::PP::Block::get_str('PDL::PP::ComplexThreadLoop=ARRAY(0x8223c28)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 200
+	PDL::PP::Block::get_str_int('PDL::PP::GenericLoop=ARRAY(0x8222e0c)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 186
+	PDL::PP::Block::get_str('PDL::PP::GenericLoop=ARRAY(0x8222e0c)', 'PDL::PP::Code=HASH(0x822fea4)', 'ARRAY(0x8223ba4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP/PDLCode.pm line 142
+	PDL::PP::Code::new('PDL::PP::Code', '$o(n) = 0;', 'undef', 'ARRAY(0x825ec58)', 'HASH(0x82b7fb8)', 'PDL::PP::PdlDimsObj=HASH(0x82b7898)', 'ARRAY(0x82b7934)', 'HASH(0x82b7acc)', 1, ...) called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 584
+	PDL::PP::__ANON__('$o(n) = 0;', 'undef', 'ARRAY(0x825ec58)', 'HASH(0x82b7fb8)', 'PDL::PP::PdlDimsObj=HASH(0x82b7898)', 'ARRAY(0x82b7934)', 'HASH(0x82b7acc)', 1, 'shift_negs', ...) called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 904
+	PDL::PP::translate('HASH(0x813c144)', 'ARRAY(0x82c49b4)') called at /usr/lib/perl5/vendor_perl/5.8.8/i386-linux/PDL/PP.pm line 295
+	PDL::PP::pp_def('shift_negs', 'Pars', 'i(n);[o] o(n)', 'Code', '$o(n) = 0;') called at foo_pl_d5fe.pd line 7
+Inline running PDL::PP version 2.2...

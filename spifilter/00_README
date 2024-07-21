@@ -1,0 +1,23 @@
+The programs 'addspi' and 'spifilter' are written in Perl and require
+the PDL and Astro::FITS::CFITSIO modules. They have been tested on a
+variety of systems - Linux, OS X and Solaris on x86 and Sparc
+hardware, both 64 and 32 bit. In general, it is recommended that
+newer versions of PDL and Astro::FITS::CFITSIO be used, although the
+programs have been tested successfully with older versions, back to
+PDL v2.4.1 and Astro::FITS::CFITSIO v1.01.
+
+addspi: append SAMP and SPI columns to an HRC-S event list. Normally
+  called as
+    $ addspi input_evt.fits output_evt.fits
+  or try
+    $ addspi -h
+  for available options.
+
+spimeanfits.fits: gain map used by addspi
+
+spifilter: filter an HRC-S/LETG event list on SPI. Usually called as
+    $ spifilter input_evt.fits output_evt.fits
+  or give argument -h for a list of available options.
+
+spifilter.spec: SPI filtering specification as a function of
+  wavelength, used by spifilter

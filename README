@@ -1,0 +1,223 @@
+# raw data copied
+#   from   /data/aschrc6/wilton/hrcs/raw
+#   to     /data/legs/rpete/data/hrcs_lab/raw
+#
+# Mike Juda details the reprocessing procedure
+#  in /data/aschrc1/GENHRC/RAW/FAST_FMT/HRC-S/fast-format_data_processing.txt
+#
+# getting evt0 files requires
+#   /data/juda1/juda/asc/hrc/code/ssm/19990610/fasttm2fftm
+# and
+#   /data/juda1/juda/asc/hrc/code/evt_tools/fftm2evt0
+#
+# an example would be
+# gzip -dc p197061024.rd.gz | fasttm2fftm | fftm2evt0 > p197061024_evt0.fits
+#
+# I've copied the sources for these programs to the current directory
+# and recompiled for ix86 linux,
+# 
+
+# create all level 0 files
+datadir=/data/legs/rpete/data/hrcs_lab
+rawdir=$datadir/raw
+evt0dir=$datadir/evt0
+mkdir -p $evt0dir 2>/dev/null
+for raw in $rawdir/*.rd.gz
+do
+  base=`basename $raw | sed s/.rd.gz//`
+  evt0=$evt0dir/${base}_evt0.fits
+  echo creating $evt0
+  gzip -dc $raw | ./fasttm2fftm/fasttm2fftm | ./fftm2evt0/fftm2evt0 \!$evt0
+done
+
+# Now we create level 1 data. Mike has an example obsfile at
+#   /data/aschrc1/GENHRC/RAW/FAST_FMT/HRC-S/p197061024_obs.par
+# I'll just copy the file to the current dir and name it obs.par.
+# Keywords such as title, date-obs, tstop, exp times and sim positions
+# are going to remain unchanged for each evt1 file.
+#
+# Mike has also created an appropiate ampsfcorfile at
+#   /data/aschrc1/GENHRC/RAW/FAST_FMT/HRC-S/amp_sf_cor.fits
+# that file is copied here
+#
+# first set up parameters, from
+#   /data/aschrc1/GENHRC/RAW/FAST_FMT/HRC-S/hrc_process_events.par
+# copied to the current directory
+#
+punlearn hrc_process_events
+pset hrc_process_events gainfile=$CALDB/data/chandra/hrc/bcf/gain/hrcsD1999-07-22gainN0001.fits
+pset hrc_process_events degapfile=$CALDB/data/chandra/hrc/bcf/gaplookup/hrcsD1999-07-22gaplookupN0002.fits
+pset hrc_process_events hypfile=$CALDB/data/chandra/hrc/bcf/fptest/hrcsD1999-07-22fptestN0004.fits
+pset hrc_process_events ampsfcorfile=amp_sf_cor.fits
+pset hrc_process_events tapfile=$CALDB/data/chandra/hrc/bcf/tapring/hrcsD1999-07-22tapringN0002.fits
+pset hrc_process_events ampsatfile=$CALDB/data/chandra/hrc/bcf/sattest/hrcsD1999-07-22sattestN0002.fits
+pset hrc_process_events evtflatfile=$CALDB/data/chandra/hrc/bcf/eftest/hrcsD1999-07-22eftestN0001.fits
+pset hrc_process_events badfile=lev1_bad_evts.fits
+pset hrc_process_events instrume=hrc-s
+
+
+#
+# normally we'd filter pha=0:254, but we'll keep them all for this analysis
+#
+filter='[status=xxxxxx00xxxx0xxx0000x000xx0000xx]'
+
+##
+## the badpixfile is v3 from http://cxc.harvard.edu/cal/Hrc/badpix.html#hrc-s
+## saved to hrc_badpix_s.v3.fits.orig
+##
+## That badpixfile has extension AXAF_BADPIX, but CIAO expects it to be named
+## BADPIX.
+#
+#cp hrc_badpix_s.v3.fits.orig hrc_badpix_s.v3.fits
+#dmhedit hrc_badpix_s.v3.fits[AXAF_BADPIX] none add EXTNAME BADPIX
+#dmhedit hrc_badpix_s.v3.fits[AXAF_BADPIX] none add HDUNAME BADPIX
+
+# nevermind all of that badpix stuff, we've defined our own badpix regions.
+# Details and $bpixreg definition in README.badpixreg
+
+source README.badpixreg
+
+# we'll do a two stage filter with $filter and $bpixreg since I don't
+# know how to combine the two
+
+evt1dir=$datadir/evt1
+mkdir -p $evt1dir 2>/dev/null
+for evt0 in $evt0dir/*_evt0.fits
+do
+  base=`basename $evt0 | sed s/_evt0.fits//`
+
+  evt1=$evt1dir/${base}_evt1.fits
+  echo creating $evt1
+  hrc_process_events infile=$evt0 outfile=$evt1 badpixfile=NONE acaofffile=NONE obsfile=obs.par clobber=yes
+
+  evt1filt1=$evt1dir/${base}_evt1_filt1.fits
+  evt1filt=$evt1dir/${base}_evt1_filt.fits
+  echo creating $evt1filt
+  dmcopy "$evt1$filter" $evt1filt1 clobber=yes opt=all
+  dmcopy "$evt1filt1$bpixreg" $evt1filt clobber=yes opt=all
+  rm -f $evt1filt1
+done
+
+#
+# background data are in /data/letg4/bradw/88gainmap/Background
+# Almus catted them all together into all_hrcs_bkg.rd
+# All bg files copied to /data/legs/rpete/data/hrcs_lab/bg
+#
+# Now we do similar processing of the background.
+#
+
+bgdir=/data/legs/rpete/data/hrcs_lab/bg
+for rd in $bgdir/p*.rd $bgdir/all_hrcs_bkg.rd
+do
+  base=`basename $rd | sed s/.rd//`
+  evt0=$bgdir/${base}_evt0.fits
+  evt1=$bgdir/${base}_evt1.fits
+  evt1filt1=$bgdir/${base}_evt1_filt1.fits
+  evt1filt=$bgdir/${base}_evt1_filt.fits
+
+  echo creating $evt0
+  ./fasttm2fftm/fasttm2fftm < $rd | ./fftm2evt0/fftm2evt0 \!$evt0
+
+  echo creating $evt1
+  hrc_process_events infile=$evt0 outfile=$evt1 badpixfile=NONE acaofffile=NONE obsfile=obs.par clobber=yes
+
+  echo creating $evt1filt
+  dmcopy "$evt1$filter" $evt1filt1 clobber=yes opt=all
+  dmcopy "$evt1filt1$bpixreg" $evt1filt clobber=yes opt=all
+  rm -f $evt1filt1
+
+done
+
+#
+# a few Perl programs for extracting PHA histograms from the subtaps and
+# doing a bit of statistics with them
+#
+# genstats.pl - create RDB and BIN files from an event list, the RDB
+#               contains simple statistics for each subtap and parameters
+#               for a single fitted normal distribution
+#
+# The BIN format are series of records for each subtap. All values are
+# big-endian 32 bit longs - unsigned for header info, signed for histogram
+# values. A single record contains, in order
+#
+#   YTAP YSUBTAP XTAP XSUBTAP Y1 Y2 X1 X2 HISTOGRAM (256 PHA, 512 SAMP values)
+#
+# so a record is (8+256)*4 bytes for PHA or (8+512)*4 for SAMP
+#
+# fit_hists.pl - reads a BIN file and fits double gaussian using Sherpa
+#
+# NOTE: low_e_stats.pl is the wrong approach
+# low_e_stats.pl - companion of sorts to fit_hists.pl, this one fits
+#                  a Gaussian to the main peak, subtracts that model
+#                  and produces stats for the remaining low energy counts
+#
+# extract_hist.pl - extract histogram data from a BIN file for a single subtap
+#
+
+outdir=/data/legs/rpete/data/hrcs_lab/analysis
+
+#
+# extract background from unexposed plates
+#
+
+bgevt1=$outdir/unexposed_evt1.fits
+bgevt1filt1=$outdir/unexposed_evt1_filt1.fits
+bgevt1filt=$outdir/unexposed_evt1_filt.fits
+perl bg_extract.pl $bgevt1
+dmcopy "$bgevt1$filter" $bgevt1filt1 clobber=yes opt=all
+dmcopy "$bgevt1filt1$bpixreg" $bgevt1filt clobber=yes opt=all
+rm -f $bgevt1filt1
+
+# merge the unexposed background and dedicated background tests
+dmmerge $bgdir/all_hrcs_bkg_evt1_filt.fits,$outdir/unexposed_evt1_filt.fits $outdir/merged_bg_evt1_filt.fits clobber=yes
+
+# generates statistics for all (non-background) tests
+perl genstats.pl --outdir=$outdir --nobin
+perl genstats.pl --outdir=$outdir --nordb --nosubext
+perl genstats.pl --outdir=$outdir --nobin --bgsubtract B-Ka
+perl genstats.pl --outdir=$outdir --3x3
+perl genstats.pl --outdir=$outdir --3x3 --nobin --bgsubtract B-Ka
+
+# do the same for our merged background dataset
+perl genstats.pl --filtdir=$outdir --outdir=$outdir merged_bg --nosubext
+perl genstats.pl --filtdir=$outdir --outdir=$outdir merged_bg --3x3
+
+for f in $outdir/*.bin;
+do
+  o=`echo $f | sed -e s/.bin/_gfits.rdb/`
+  echo creating $o
+  perl fit_hists.pl $f > $o
+
+#  o=`echo $f | sed -e s/.bin/_lowe.rdb/`
+#  echo creating $o
+#  perl low_e_stats.pl $f > $o
+
+done
+
+perl fit_hists2.pl --dev fits.ps/ps
+perl fit_hists2.pl --samp --dev fits_samp.ps/ps
+
+for anode in B-Ka C-Ka O-Ka Ni-La Al-Ka Ag-La Ti-Ka Fe-Ka
+do
+  echo $anode
+  perl fit_hists2.pl --nofitfits --dev ${anode}.ps/ps $anode > ${anode}.rdb
+  perl fit_hists2.pl --samp --nofitfits --dev ${anode}_samp.ps/ps $anode > ${anode}_samp.rdb
+done
+
+# samp can be added to l2 file (assuming sumamps and amp_sf
+# columns are preserved through the pipeline) with
+#
+# dmtcalc in.fits out.fits expression="samp=sumamps*(2^(amp_sf-1))/128" clobber=yes
+
+
+# create SPI files
+datadir=/data/legs/rpete/data/hrcs_lab
+evt1dir=$datadir/evt1
+outdir=/data/legs/rpete/data/hrcs_lab/analysis
+for f in $evt1dir/*_evt1_filt.fits $outdir/merged_bg_evt1_filt.fits
+do
+  base=`basename $f`
+  outf=$outdir/${base%.fits}_spi.fits
+  echo creating $outf
+  ./addspi --notcorr $f $outf
+done
